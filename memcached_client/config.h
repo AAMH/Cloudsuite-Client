@@ -9,7 +9,7 @@
 
 #define TCP_MODE 0
 #define UDP_MODE 1
-#define MAX_SERVERS 4
+#define MAX_SERVERS 60
 
 //#define FLEXUS
 
