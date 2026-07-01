@@ -199,11 +199,33 @@ int processResponse(struct response* response, int final, double difftime){
   if(errorCode == 0) {
     if(response_header->opcode == OP_GET || response_header->opcode == OP_GETQ) {
       global_stats.hits++;
+      response->request->worker->hits++;
     }
   } else {
     struct request* currentRequest = response->request;
     while(currentRequest != NULL) {
       global_stats.misses++;
+      currentRequest->worker->misses++;
+
+      // struct request* request;
+      // char* value = NULL;
+      // int valueSize = 0;
+
+      // //valueSize = //getIntQuantile(currentRequest->worker->config->value_size_dist);
+      // valueSize = search(currentRequest->key)->ValueS;
+      // value = malloc(sizeof(char) * valueSize);
+      // memset(value, 'a', sizeof(char) * valueSize);
+      // value[valueSize-1] = '\0';
+      // request = createRequest(SET, currentRequest->worker->connections[randomFunction(currentRequest->worker) % currentRequest->worker->nConnections], currentRequest->worker, currentRequest->key, value, TYPE_SET);
+      // request->next_request = NULL;
+
+
+      // if( !pushRequest(response->request->worker, request) ) {
+      //   deleteRequest(request);
+      // }
+      // else
+      //   sendRequest(request);
+
       currentRequest = currentRequest->next_request;
     }//End while
   }

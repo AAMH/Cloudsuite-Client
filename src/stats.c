@@ -9,6 +9,8 @@
 #include <assert.h>
 #include "worker.h"
 
+struct memcached_stats global_stats;
+struct timeval start_time;
 pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void addSample(struct stat* stat, float value) {
@@ -95,7 +97,14 @@ double findQuantile(struct stat* stat, double quantile) {
 
 }//End findQuantile()
 
-void printGlobalStats(struct config* config) {
+static inline void now_epoch_sec_nsec(long *sec, long *nsec) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    *sec = ts.tv_sec;
+    *nsec = ts.tv_nsec;
+}
+
+void printGlobalStats(struct config* config, FILE *f) {
 
   pthread_mutex_lock(&stats_lock);
   struct timeval currentTime;
@@ -111,13 +120,31 @@ void printGlobalStats(struct config* config) {
   printf("%10f, %9.1f,  %10d, %10d, %10d, %10d, %10d, %10f, %10f, %10f, %10f, %10f, %10f, %10f, %10f\n", 
 		timeDiff, rps, global_stats.requests, global_stats.gets, global_stats.sets, global_stats.hits, global_stats.misses,
 		1000*getAvg(&global_stats.response_time), 1000*q90, 1000*q95, 1000*q99, 1000*std, 1000*global_stats.response_time.min, 1000*global_stats.response_time.max, getAvg(&global_stats.get_size));
+
+  long sec, nsec;
+  now_epoch_sec_nsec(&sec, &nsec);
+  fprintf(f,"%ld.%09ld,", sec, nsec);
+
+  fprintf(f,"%10f, %9.1f,  %10d, %10d, %10d, %10d, %10d, %10f, %10f, %10f, %10f, %10f, %10f, %10f, %10f\n", 
+		timeDiff, rps, global_stats.requests, global_stats.gets, global_stats.sets, global_stats.hits, global_stats.misses,
+		1000*getAvg(&global_stats.response_time), 1000*q90, 1000*q95, 1000*q99, 1000*std, 1000*global_stats.response_time.min, 1000*global_stats.response_time.max, getAvg(&global_stats.get_size));
+
+  // fprintf(f,"%.2f\n",((double)global_stats.hits / (double)(global_stats.hits + global_stats.misses)) * 100);
+   fflush(f);
+  
   int i;
   printf("Total requests per worker:\n");
   for(i=0; i<config->n_workers; i++){
 //    printf("%d ", config->workers[i]->n_requests);
-    printf("%lu ", config->workers[i]->total_requests);  
+    printf("%lu ", config->workers[i]->total_requests);
+
+    // fprintf(f,"%.2f,",((double)config->workers[i]->hits / (double)(config->workers[i]->hits + config->workers[i]->misses)) * 100);  
 	config->workers[i]->total_requests = 0;	
-} 
+  config->workers[i]->misses = 0;
+  config->workers[i]->hits = 0;
+}
+// fprintf(f,"\n"); 
+fflush(f);
   printf("\n");
   //Reset stats
   memset(&global_stats, 0, sizeof(struct memcached_stats));
@@ -132,18 +159,44 @@ void printGlobalStats(struct config* config) {
 
 
 //Print out statistics every second
-void statsLoop(struct config* config) {
+void statsLoop(struct config* config, FILE * f) {
 
   pthread_mutex_lock(&stats_lock);
   gettimeofday(&start_time, NULL);
   pthread_mutex_unlock(&stats_lock);
 
+  int count = 0;
+  for(int i=0; i<config->n_workers; i++){
+  config->workers[i]->INDEX = -1;
+  config->workers[i]->start_index = 0;
+  config->workers[i]->counter = 10;
+  config->workers[i]->end_index = 850000;//config->dep_dist->n_entries / config->workers[i]->counter;
+  printf("Total: %d\n",config->dep_dist->n_entries);
+
+  // if(scanf("%d", &config->workers[i]->start_index) == 1){}
+  // if(scanf("%d", &config->workers[i]->end_index) == 1){}
+	
+  config->workers[i]->iteration = 0;
+  config->workers[i]->cliff_mode = true;
+  srand(time(NULL));
+    config->workers[i]->NoOfCliffs = 1;//rand() % 3 + 1;
+  config->workers[i]->max_iteration = 25;
+  }
+
   sleep(2);
   printf("Stats:\n");
   printf("-------------------------\n");
   while(1) {
-    printGlobalStats(config);
+    printGlobalStats(config, f);
     sleep(config->stats_time);
+    count++;
+ /*   if(count == 60){
+      count = 0;
+      config->cliff_mode = true;
+      //config->INDEX = -1;
+      config->counter = 0;
+      config->iteration = 0;
+    }*/
   }//End while()
 
 

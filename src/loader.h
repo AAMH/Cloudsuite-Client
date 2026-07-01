@@ -21,7 +21,7 @@
 #include <pthread.h>
 #include "stats.h"
 #include "generate.h"
-
+#include <ifaddrs.h>
 
 
 struct config* parseArgs(int argc, char** argv);

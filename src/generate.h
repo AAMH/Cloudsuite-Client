@@ -46,6 +46,7 @@ struct int_dist* loadDistributionFile(char* filename);
 struct dep_dist* loadAndScaleDepFile(struct config* config);
 struct dep_dist* loadDepFile(struct config* config);
 struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* worker);
+int getRandomIndex(struct dep_dist* dep_dist, struct worker* worker);
 struct int_dist* createExponentialDistribution(int meanInterarrival);
 struct key_list* generateKeys(struct config* config);
 struct request* generateRequest(struct config* config, struct worker* worker);

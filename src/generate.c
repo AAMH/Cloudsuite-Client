@@ -54,6 +54,31 @@ struct key_list* generateKeys(struct config* config) {
 
 }//End generateKeys()
 
+
+int getRandomIndex(struct dep_dist* dep_dist, struct worker* worker){
+
+  double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
+  //Do a binary search
+  int top = 0;
+  int bottom = dep_dist->n_entries-1;
+  int current = bottom/2;
+  struct dep_entry* dep_entry = NULL;
+  while(top != bottom){
+    dep_entry = dep_dist->dep_entries[current];
+//    printf("top %d bottom %d current %d lookup %f cdf %f\n", top, bottom, current, cdf_to_lookup, dep_entry->cdf);
+    if( dep_entry->cdf > cdf_to_lookup){
+      bottom = current;
+    } else {
+      top = current + 1;
+    }
+    current = (bottom-top)/2 + top;
+  }
+
+ //  printf("top %d bottom %d current %d lookup %f cdf %f\n", top, bottom, current, cdf_to_lookup, dep_entry->cdf);
+
+  return current;   
+}
+
 struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* worker){
 
   double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
@@ -175,6 +200,7 @@ struct dep_dist* loadDepFile(struct config* config) {
     lines++;
   }
   fclose(file);
+  initialize_Hash(lines);
   dist->dep_entries = malloc(sizeof(struct dep_entry*)*lines);
   dist->n_entries = lines;
   int i = lines-1;
@@ -189,6 +215,9 @@ struct dep_dist* loadDepFile(struct config* config) {
     entry->size = atoi(sizeValue);
     strcpy(entry->key, key);
     dist->dep_entries[i] = entry;
+
+    insertHashEntry(entry->key,entry->size);
+
     i--;   
     avg_size+=entry->size; 
   }//End while()
@@ -296,7 +325,9 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       worker->warmup_key--;
       worker->warmup_key_check++;
       key = dep_entry->key;
+      
       valueSize = dep_entry->size;
+      //valueSize = (valueSize > 500 && valueSize < 1500) ? valueSize + 1000 : valueSize; // skip class 5
       value = malloc(sizeof(char) * valueSize);
       memset(value, 'a', sizeof(char) * valueSize);
       value[valueSize-1] = '\0';
@@ -308,9 +339,59 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       request->next_request = NULL;
       return request;
 
-    } else { 
-     dep_entry = getRandomDepEntry(config->dep_dist, worker);
-    }
+//     } else { 
+
+//       if(worker->INDEX == -1){
+// 	srand(time(NULL));
+// 	worker->max_iteration = rand() % 11 + 20;
+
+// 	srand(time(NULL));
+
+//   worker->start_index = 0;//(config->dep_dist->n_entries/8 /*- 5000000*/);
+// //	worker->end_index = config->dep_dist->n_entries-1;
+
+// 	// worker->start_index = rand() % (config->dep_dist->n_entries - 4000000);
+// 	// if(config->dep_dist->n_entries > 3000000)
+// 	//   worker->end_index = rand() % (config->dep_dist->n_entries - 3000000) + 3000000;
+// 	// else
+// 	 worker->end_index = config->dep_dist->n_entries -1;
+// 	printf("Total: %d\n",config->dep_dist->n_entries);
+
+//   // if(scanf("%d", &worker->start_index) == 1){}
+//   // if(scanf("%d", &worker->end_index) == 1){}
+// 	printf("START INDEX:%d,   end:%d,   total:%d\n",worker->start_index,worker->end_index,config->dep_dist->n_entries);
+// 	 worker->INDEX = worker->end_index;
+
+
+// 	}
+
+// 	dep_entry = config->dep_dist->dep_entries[ (worker->INDEX) % config->dep_dist->n_entries];
+	
+// 	// if(worker->INDEX % 5 == 0){
+//   //       dep_entry = getRandomDepEntry(config->dep_dist, worker);
+//   //     }
+
+// 	worker->INDEX--;
+// 	if(worker->INDEX == worker->start_index){
+//         // FILE *f = fopen("output_CS.csv","r+");     
+// 	printf("NEEEEEEEEEEEXXXXXXXXXXXXXXXXXXXT\n");
+//     // fprintf(f, "NEEEEEEEEEEEXXXXXXXXXXXXXXXXXXXT\n");
+//     // fflush(f);
+//     // fclose(f);
+// 	worker->INDEX = worker->end_index;
+// 	worker->iteration++;
+// 	}
+
+//       if(worker->NoOfCliffs > 1 && worker->iteration == worker->max_iteration){
+//         worker->INDEX = -1;
+//         worker->iteration = 0;
+//         worker->NoOfCliffs--;
+//       }
+    
+   }else{
+       dep_entry = getRandomDepEntry(config->dep_dist, worker);
+      }
+    // }
     key = dep_entry->key;
     valueSize = dep_entry->size;
   //printf("key %s valueSize %d\n", key, valueSize);

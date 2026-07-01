@@ -186,7 +186,7 @@ struct config* parseArgs(int argc, char** argv) {
         break;
       
       case 'S':
-	config->scaling_factor=atoi(optarg);
+	config->scaling_factor=atof(optarg);
 	break;
       
       case 't':
@@ -337,9 +337,79 @@ int main(int argc, char** argv){
   struct config* config = parseArgs(argc, argv);
   printConfiguration(config);
 
+  int fd = -1;
+  struct ifreq ifr;
+  char chosen_ifname[IFNAMSIZ] = {0};
+
+  /* 1) Find interface whose IPv4 address is in 10.10.1.x */
+  struct ifaddrs *ifaddr, *ifa;
+  if (getifaddrs(&ifaddr) == -1) {
+      perror("getifaddrs");
+      /* fallback to some default name if you like */
+      strncpy(chosen_ifname, "eno33np0", IFNAMSIZ - 1);
+  } else {
+      for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+          if (ifa->ifa_addr == NULL)
+              continue;
+
+          if (ifa->ifa_addr->sa_family == AF_INET) {
+              char addr[INET_ADDRSTRLEN];
+              struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
+
+              if (!inet_ntop(AF_INET, &sa->sin_addr, addr, sizeof(addr))) {
+                  continue;
+              }
+
+              /* Check if address is in 10.10.1.x (prefix match is fine here) */
+              if (strncmp(addr, "10.10.1.", 8) == 0) {
+                  strncpy(chosen_ifname, ifa->ifa_name, IFNAMSIZ - 1);
+                  chosen_ifname[IFNAMSIZ - 1] = '\0';
+                  break;
+              }
+          }
+      }
+      freeifaddrs(ifaddr);
+
+      /* If we didn’t find any 10.10.1.x, optionally fall back */
+      if (chosen_ifname[0] == '\0') {
+          fprintf(stderr, "Warning: no interface with 10.10.1.x found, falling back to eno33np0\n");
+          strncpy(chosen_ifname, "enp65s0f0np0", IFNAMSIZ - 1);
+      }
+  }
+
+  /* 2) Use chosen_ifname in your original ifreq/ioctl code */
+  fd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (fd < 0) {
+      perror("socket");
+      /* handle error as you like */
+  }
+
+  memset(&ifr, 0, sizeof(ifr));
+  ifr.ifr_addr.sa_family = AF_INET;
+  strncpy(ifr.ifr_name, chosen_ifname, IFNAMSIZ - 1);
+
+  if (ioctl(fd, SIOCGIFADDR, &ifr) == -1) {
+      perror("ioctl(SIOCGIFADDR)");
+      /* handle error */
+  }
+  close(fd);
+  fprintf(stderr, "Using RDMA interface: %s\n", chosen_ifname);
+
   setupLoad(config);
+
+  char file_path[100];
+  sprintf(file_path,"/users/AMH/cloudsuite_%s_%d.csv", 
+          inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr), config->server_port[0]);
+  file_path[sizeof(file_path) - 1] = '\0';
+
+  printf("filepath: %s\n", file_path);
+  FILE *f = fopen(file_path,"w");
+
+  fprintf(f,"%2s,%10s,%8s,%16s, %8s,%11s,%10s,%13s,%10s,%10s,%10s,%12s,%10s,%10s,%11s,%14s\n", "ts", "timeDiff", "rps", "requests", "gets", "sets",  "hits", "misses", "avg_lat", "90th", "95th", "99th", "std", "min", "max", "avgGetSize");
+  fflush(f);
+
   createWorkers(config);
-  statsLoop(config);
+  statsLoop(config,f);
   return 0;
 
 }//End main()

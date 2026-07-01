@@ -11,11 +11,12 @@
 #include "request.h"
 #include "response.h"
 #include "generate.h"
+#include <stdbool.h>
 
 #include "mt19937p.h"
 
-#define QUEUE_SIZE 1000000
-#define INCR_FIX_QUEUE_SIZE 1000
+#define QUEUE_SIZE 10000000
+#define INCR_FIX_QUEUE_SIZE 10000
 
 struct worker {
   
@@ -39,6 +40,8 @@ struct worker {
   long total_requests;
   int knob_index;
   int current_request_id;
+  int misses;
+  int hits;
 
   struct request* incr_fix_queue[INCR_FIX_QUEUE_SIZE];
   int incr_fix_queue_head;
@@ -47,6 +50,17 @@ struct worker {
   int warmup_key;
   int warmup_key_check;	
   int received_warmup_keys;
+
+  int INDEX;
+  int counter;
+  int iteration;
+  bool cliff_mode;
+
+  int start_index;
+  int end_index;
+
+  int NoOfCliffs;
+  int max_iteration;
 
 };
 

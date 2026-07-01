@@ -6,10 +6,11 @@
 #include <stdint.h>
 #include "generate.h"
 #include "pthread.h"
+#include "MyHash.h"
 
 #define TCP_MODE 0
 #define UDP_MODE 1
-#define MAX_SERVERS 60
+#define MAX_SERVERS 4
 
 //#define FLEXUS
 
@@ -39,7 +40,7 @@ struct config {
   int server_memory;
   float server_share[MAX_SERVERS];	
   int keysToPreload;
-  int scaling_factor;
+  float scaling_factor;
   float get_frac;
   float multiget_frac;
   float incr_frac;
