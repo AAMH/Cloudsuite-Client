@@ -282,8 +282,12 @@ struct dep_dist* loadDepFile(struct config* config) {
   double previous_cdf = first_preload_index > 0 ? dist->dep_entries[first_preload_index - 1]->cdf : 0.0;
   double preload_coverage = dist->dep_entries[dist->n_entries - 1]->cdf - previous_cdf;
   printf("Average Size = %10.5f\n", avg_size);
-  printf("Keys to Preload = %d\n", config->keysToPreload);
-  printf("Estimated request probability covered by preload = %.2f%%\n", 100.0 * preload_coverage);
+  printf("Preload SET operations = %d\n", config->keysToPreload);
+  if(config->sequential_access) {
+    printf("Estimated request probability covered by sequential preload prefix = %.2f%%\n", 100.0 * preload_coverage);
+  } else {
+    printf("Preload key selection: skewed CDF sampling, matching the main phase\n");
+  }
   if(config->keysToPreload >= lines - 1) {
     printf("Warning: preload is configured to load nearly the full dataset. If memcached is smaller than -D, later cold inserts can evict hot keys.\n");
   }
@@ -391,10 +395,16 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
     struct dep_entry* dep_entry = NULL;
     if(config->pre_load) {
 
-      if(worker->warmup_key == -1) {
-        printf("doh\n");
+      if(worker->warmup_key_check >= config->keysToPreload) {
+        printf("All warmup requests generated\n");
+        exit(0);
       }
-      dep_entry = config->dep_dist->dep_entries[config->dep_dist->n_entries - worker->warmup_key_check-1];
+
+      if(config->sequential_access) {
+        dep_entry = config->dep_dist->dep_entries[config->dep_dist->n_entries - worker->warmup_key_check-1];
+      } else {
+        dep_entry = getRandomDepEntry(config->dep_dist, worker);
+      }
       warmup_index = worker->warmup_key;
       worker->warmup_key--;
       worker->warmup_key_check++;

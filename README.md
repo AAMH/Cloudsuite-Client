@@ -277,6 +277,8 @@ Dataset mode estimates `keysToPreload` from:
 server_memory_MB / average_object_size
 ```
 
+For the default dataset workload, preload chooses keys with the same skewed CDF sampler used by the main phase. This warms the cache according to the benchmark's access distribution instead of walking the dataset in file order. If `-q` is enabled, preload follows the sequential dataset order to match sequential mode.
+
 Synthetic mode sets `keysToPreload` to the synthetic key count from `-k`.
 
 ## GET-Miss Fill Behavior
