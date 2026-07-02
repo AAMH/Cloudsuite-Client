@@ -10,7 +10,7 @@ This repository contains a CloudSuite Memcached benchmarking loader with:
 
 Full build instructions, workload examples, flag reference, dataset formats, and troubleshooting notes are in:
 
-[Cloudsuite-Merged/README.md](src/README.md)
+[src/README.md](src/README.md)
 
 Licensing and attribution files:
 
