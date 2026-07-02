@@ -346,9 +346,18 @@ void setupLoad(struct config* config) {
   }
   if(config->key_pop_dist == NULL){
     config->key_pop_dist = createUniformDistribution(0, config->n_keys -1);
-    printf("created uniform distribution for keys %d\n", config->n_keys);
+    if(config->dep_dist == NULL) {
+      printf("created uniform distribution for synthetic/fallback keys %d\n", config->n_keys);
+    }
   } else {
     config->n_keys = CDF_VALUES;
+  }
+  if(config->dep_dist != NULL) {
+    if(config->sequential_access) {
+      printf("Dataset key selection: sequential over %d loaded entries\n", config->dep_dist->n_entries);
+    } else {
+      printf("Dataset key selection: skewed CDF sampling over %d loaded entries\n", config->dep_dist->n_entries);
+    }
   }
   config->key_list = generateKeys(config);
   
