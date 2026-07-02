@@ -23,10 +23,12 @@ The source builds a single executable named `loader`.
   conn.c/.h             TCP connection setup
   tenants.txt           Memcached tenant/target list
   Makefile              Build recipe
+  LICENSE.md            CloudSuite license and provenance
+  THIRD_PARTY_NOTICES.md Third-party copyright/license notices
 
 ../twitter_dataset/
   twitter_dataset_unscaled
-  twitter_dataset_2     Optional, if present in your checkout
+  twitter_dataset_scaled_x4     Optional, if present in your checkout or manually scaled
 ```
 
 ## Build
@@ -36,6 +38,7 @@ The source builds a single executable named `loader`.
 Install build tools and libevent development headers, then run:
 
 ```bash
+cd src
 make clean
 make
 ```
@@ -83,7 +86,7 @@ Preload:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -w 2 \
   -S 1 \
@@ -98,7 +101,7 @@ Main phase:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -g 1 \
   -T 1 \
@@ -112,9 +115,27 @@ Main phase:
 
 Use `-q` to walk sequentially through the loaded Twitter/key-value distribution instead of sampling from the skewed CDF. Each worker starts at a slightly different position and wraps around at the beginning of the distribution.
 
+Sequential preload:
+
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
+  -s tenants.txt \
+  -q \
+  -w 1 \
+  -S 1 \
+  -D 2048 \
+  -j \
+  -T 1 \
+  -r 100000 \
+  -C ./sequential_preload_stats.csv
+```
+
+Sequential main phase:
+
+```bash
+./loader \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -q \
   -g 1 \
@@ -129,7 +150,7 @@ To also fill GET misses with SET requests, add `-R`:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -q \
   -R \
@@ -140,7 +161,7 @@ To also fill GET misses with SET requests, add `-R`:
   -r 25000 \
   -C ./sequential_fill_stats.csv
 ```
-
+**This option is available in all three modes.**
 ### 3. Synthetic Fixed-Size Workload
 
 Use synthetic mode to ignore the Twitter CDF and generate a fixed keyspace:
@@ -163,7 +184,7 @@ Synthetic preload:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_unscaled \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -w 1 \
   -S 1 \
@@ -182,7 +203,7 @@ Synthetic main phase:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_unscaled \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -g 1 \
   -T 1 \
@@ -276,6 +297,8 @@ Dataset mode estimates `keysToPreload` from:
 server_memory_MB / average_object_size
 ```
 
+For the default dataset workload, preload chooses keys with the same skewed CDF sampler used by the main phase. This warms the cache according to the benchmark's access distribution instead of walking the dataset in file order. If `-q` is enabled, preload follows the sequential dataset order to match sequential mode.
+
 Synthetic mode sets `keysToPreload` to the synthetic key count from `-k`.
 
 ## GET-Miss Fill Behavior
@@ -301,6 +324,20 @@ Example:
 ```
 
 Using the same binary, seed, key count, worker count, and request-rate settings will reproduce the same synthetic key selection behavior.
+
+## Licensing And Attribution
+
+This repository contains a modified CloudSuite Memcached load generator. The code was originally obtained from the CloudSuite project and has been modified over time for benchmarking experiments.
+
+CloudSuite is maintained by the Parallel Systems Architecture Lab at EPFL:
+
+- CloudSuite website: https://www.cloudsuite.ch/
+- Upstream repository: https://github.com/parsa-epfl/cloudsuite
+- CloudSuite license page: https://www.cloudsuite.ch/license/
+
+CloudSuite states that its software components are open-source and that individual components are governed by their own licensing terms. The CloudSuite internally developed code is covered by the BSD-style CloudSuite license reproduced in `LICENSE.md`.
+
+Some source files include separate third-party notices, including Mersenne Twister code by Makoto Matsumoto and Takuji Nishimura. See `THIRD_PARTY_NOTICES.md` for details.
 
 ## Troubleshooting
 
@@ -355,7 +392,7 @@ Example:
 ```bash
 make clean && make
 
-./loader -a ../twitter_dataset/twitter_dataset_2 -s tenants.txt -w 1 -j -D 2048 -S 4 -o ./twitter_dataset_scaled_x4 -r 100000 -T 1 -C ./preload_scaled.csv
+./loader -a ../twitter_dataset/twitter_dataset_unscaled -s tenants.txt -w 1 -j -D 2048 -S 4 -o ../twitter_dataset/twitter_dataset_scaled_x4 -r 100000 -T 1 -C ./preload_scaled.csv
 
-./loader -a ./twitter_dataset_scaled_x4 -s tenants.txt -w 1 -c 25 -g 0.95 -r 25000 -T 1 -C ./main_phase.csv
+./loader -a ../twitter_dataset/twitter_dataset_scaled_x4 -s tenants.txt -w 1 -c 25 -g 0.95 -r 25000 -T 1 -C ./main_phase.csv
 ```
