@@ -440,7 +440,7 @@ int main(int argc, char** argv){
 
   memset(&ifr, 0, sizeof(ifr));
   ifr.ifr_addr.sa_family = AF_INET;
-  strncpy(ifr.ifr_name, chosen_ifname, IFNAMSIZ - 1);
+  memcpy(ifr.ifr_name, chosen_ifname, IFNAMSIZ);
 
   if (ioctl(fd, SIOCGIFADDR, &ifr) == -1) {
       perror("ioctl(SIOCGIFADDR)");
