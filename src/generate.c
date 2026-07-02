@@ -349,8 +349,19 @@ struct dep_dist* loadAndScaleDepFile(struct config* config) {
 
 struct request* generateRequest(struct config* config, struct worker* worker) {
 
+  if(worker->nConnections <= 0) {
+    printf("Worker %d has no connections\n", worker->cpu_num);
+    exit(-1);
+  }
+
   //Pick a random connection
-  struct conn* conn = worker->connections[parRandomUnsignedFunction(worker) % worker->nConnections];
+  unsigned int connIndex = parRandomUnsignedFunction(worker) % worker->nConnections;
+  struct conn* conn = worker->connections[connIndex];
+  if(conn == NULL) {
+    printf("generateRequest selected null connection: worker=%d index=%u nConnections=%d\n",
+           worker->cpu_num, connIndex, worker->nConnections);
+    exit(-1);
+  }
 
   char* value = NULL;
   int valueSize = 0;

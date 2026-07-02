@@ -231,7 +231,17 @@ int processResponse(struct response* response, int final, double difftime){
         memset(value, 'a', sizeof(char) * valueSize);
         value[valueSize-1] = '\0';
 
-        struct conn* conn = worker->connections[parRandomUnsignedFunction(worker) % worker->nConnections];
+        if(worker->nConnections <= 0) {
+          printf("Worker %d has no connections while filling GET miss\n", worker->cpu_num);
+          exit(-1);
+        }
+        unsigned int connIndex = parRandomUnsignedFunction(worker) % worker->nConnections;
+        struct conn* conn = worker->connections[connIndex];
+        if(conn == NULL) {
+          printf("GET miss fill selected null connection: worker=%d index=%u nConnections=%d\n",
+                 worker->cpu_num, connIndex, worker->nConnections);
+          exit(-1);
+        }
         struct request* fillRequest = createRequest(SET, conn, worker, currentRequest->key, value, TYPE_SET);
         fillRequest->next_request = NULL;
 

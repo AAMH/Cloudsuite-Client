@@ -201,7 +201,12 @@ struct request* createRequest(int requestType, struct conn* conn, struct worker*
   request->bad_multiget = 0;
 
   if(conn == NULL){
-    printf("Tried to give request a null connection\n");
+    printf("Tried to give request a null connection: requestType=%d type=%d worker=%p",
+           requestType, type, (void*)worker);
+    if(worker != NULL) {
+      printf(" cpu=%d nConnections=%d", worker->cpu_num, worker->nConnections);
+    }
+    printf("\n");
     exit(-1);
   }
   request->connection = conn;
@@ -493,4 +498,3 @@ struct request* createRequest(int requestType, struct conn* conn, struct worker*
   return request;
 
 }//End generateRequest()
-
