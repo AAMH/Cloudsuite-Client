@@ -141,7 +141,7 @@ To also fill GET misses with SET requests, add `-R`:
   -r 25000 \
   -C ./sequential_fill_stats.csv
 ```
-
+**This option is available in all three modes.**
 ### 3. Synthetic Fixed-Size Workload
 
 Use synthetic mode to ignore the Twitter CDF and generate a fixed keyspace:
