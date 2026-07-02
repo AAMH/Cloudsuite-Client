@@ -59,7 +59,7 @@ extern pthread_mutex_t stats_lock;
 //For now, all statistics are handled by this global struct
 extern struct memcached_stats global_stats;
 double findQuantile(struct stat* stat, double quantile);
-void printGlobalStats();
+void printGlobalStats(struct config* config, FILE *f);
 void checkExit(struct config* config);
 void addSample(struct stat* stat, float sample);
 double getAvg(struct stat* stat);
@@ -68,4 +68,3 @@ void statsLoop(struct config* config, FILE *f);
 
 
 #endif
-

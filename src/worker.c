@@ -4,7 +4,7 @@
 void* workerFunction(void* arg) {
 
   struct worker* worker = arg;
-  printf("Creating worker on tid %u\n", (unsigned int)pthread_self());
+  printf("Creating worker on tid %lu\n", (unsigned long)pthread_self());
 
 
 /*  int s;
@@ -14,9 +14,7 @@ void* workerFunction(void* arg) {
 
 //  sgenrand(worker->cpu_num, worker->config->random_seed);
 
-  struct timeval timestamp;
-  gettimeofday(&timestamp, NULL);
-  int seed=(timestamp.tv_usec+worker->cpu_num)%2309;			 
+  uint32_t seed = worker->config->base_seed ^ (0x9e3779b9u * (uint32_t)worker->cpu_num);
   sgenrand(seed, &(worker->myMT19937p));
 // sgenrand(worker->config->random_seed, &(worker->myMT19937p));
 /* Set affinity mask to include CPUs 0 to 7 */
@@ -118,7 +116,7 @@ struct int_dist* interarrival_dist = worker->config->interarrival_dist;
   if(interarrival_dist != NULL){
     
 if(worker->interarrival_time <= 0){
-        interarrival_time = worker->scale * getIntQuantile(interarrival_dist); //In microseconds
+        interarrival_time = worker->scale * sampleFromCdfTable(interarrival_dist, worker); //In microseconds
 	//printf("scale: %f \n ",worker->scale);        
 //   printf("new interarrival_time %d\n", interarrival_time);
         worker->interarrival_time = interarrival_time;
@@ -196,7 +194,7 @@ void receiveCallback(int fd, short eventType, void* args) {
   deleteRequest(request);
   worker->received_warmup_keys++;
 
-  if(worker->config->pre_load == 1 && worker->config->dep_dist != NULL && worker->received_warmup_keys == worker->config->keysToPreload){
+  if(worker->config->pre_load == 1 && worker->received_warmup_keys == worker->config->keysToPreload){
     printf("You are warmed up, sir\n");
     exit(0);
   }
@@ -281,14 +279,20 @@ struct worker* createWorker(struct config* config, int cpuNum) {
   worker->interarrival_time = 0;
   worker->incr_fix_queue_tail = 0; // THSES probably need to be fixed
   worker->incr_fix_queue_head = 0;
-  if(config->dep_dist != NULL && config->pre_load) {
+  worker->warmup_key = -1;
+  worker->warmup_key_check = 0;
+  worker->INDEX = -1;
+  worker->start_index = 0;
+  worker->end_index = 0;
+  worker->iteration = 0;
+  worker->NoOfCliffs = 1;
+  worker->max_iteration = 25;
+
+  if(config->pre_load) {
     worker->warmup_key = config->keysToPreload-1;
-    worker->warmup_key_check = 0;
   }
 
 
   return worker;
 
 }//End createWorker()
-
-

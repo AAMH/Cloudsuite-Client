@@ -32,6 +32,7 @@ char* randomString(int size){
 
 }//End randomStr()
 
+#define SYNTHETIC_KEY_LEN 20
 
 struct key_list* generateKeys(struct config* config) {
 
@@ -41,12 +42,17 @@ struct key_list* generateKeys(struct config* config) {
   keyList->keys = malloc(sizeof(char*) * keyList->n_keys);
 
   int i;
-  for( i = 0; i < keyList->n_keys; i++ ){ 
-    int keySize = randomFunction() % MAX_KEY_SIZE;
-    while(keySize <= 1){
-      keySize = randomFunction() % MAX_KEY_SIZE;
+  for( i = 0; i < keyList->n_keys; i++ ){
+    if(config->synthetic_workload) {
+      keyList->keys[i] = malloc(SYNTHETIC_KEY_LEN);
+      snprintf(keyList->keys[i], SYNTHETIC_KEY_LEN, "k%016" PRIx64, (uint64_t)i);
+    } else {
+      int keySize = randomFunction() % MAX_KEY_SIZE;
+      while(keySize <= 1){
+        keySize = randomFunction() % MAX_KEY_SIZE;
+      }
+      keyList->keys[i] = randomString(keySize);
     }
-    keyList->keys[i] = randomString(keySize);
     //printf("i: %d key: %s\n", i, keyList->keys[i]);
   }//End for i
 
@@ -103,19 +109,43 @@ struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* wo
   return dep_entry;  
 }
 
-int getIntQuantile(struct int_dist* dist) {
+int sampleFromCdfTable(struct int_dist* dist, struct worker* worker) {
 
-  int quantileIndex = (randomFunction() % CDF_VALUES); 
+  int quantileIndex = (parRandomFunction(worker) % CDF_VALUES);
   int value = dist->cdf_y[quantileIndex];
   //printf("index %d value %d\n", quantileIndex, value);
 
   return value;
 
-}//End getQuantile()
+}//End sampleFromCdfTable()
+
+int getIntQuantile(struct int_dist* dist, struct worker* worker) {
+
+  if(!dist->direct_uniform) {
+    return sampleFromCdfTable(dist, worker);
+  }
+
+  int min = dist->min;
+  int max = dist->max;
+  if(max <= min) return min;
+
+  unsigned int range = (unsigned int)(max - min + 1);
+  unsigned int limit = (UINT_MAX / range) * range;
+  unsigned int r;
+  do {
+    r = (unsigned int)parRandomFunction(worker);
+  } while(r >= limit);
+
+  return min + (int)(r % range);
+
+}//End getIntQuantile()
 
 struct int_dist* createConstantDistribution(int constant){
 
   struct int_dist* dist = malloc(sizeof(struct int_dist));
+  dist->min = constant;
+  dist->max = constant;
+  dist->direct_uniform = 0;
   int nValues = CDF_VALUES;
   int i;
   for( i = 0; i < nValues; i++ ){
@@ -129,11 +159,16 @@ struct int_dist* createConstantDistribution(int constant){
 struct int_dist* createExponentialDistribution(int meanInterarrival) {
 
   struct int_dist* dist = malloc(sizeof(struct int_dist));
+  dist->min = 0;
+  dist->max = 0;
+  dist->direct_uniform = 0;
   int nValues = CDF_VALUES;
   int i;
   for( i = 0; i < nValues; i++ ){
     int value = (int)(-log(1- (double)i/(double)nValues) * meanInterarrival);
     dist->cdf_y[i] = value;
+    if(i == 0 || value < dist->min) dist->min = value;
+    if(value > dist->max) dist->max = value;
   }//End for i
 
   return dist;
@@ -143,6 +178,9 @@ struct int_dist* createExponentialDistribution(int meanInterarrival) {
 struct int_dist* createUniformDistribution(int min, int max) {
 
   struct int_dist* dist = malloc(sizeof(struct int_dist));
+  dist->min = min;
+  dist->max = max;
+  dist->direct_uniform = 1;
   int nValues = CDF_VALUES;
   int i;
   double delta = (max - min)/((double)nValues);
@@ -158,6 +196,9 @@ struct int_dist* createUniformDistribution(int min, int max) {
 struct int_dist* loadDistributionFile(char* filename) {
 
   struct int_dist* dist = malloc(sizeof(struct int_dist));
+  dist->min = INT_MAX;
+  dist->max = INT_MIN;
+  dist->direct_uniform = 0;
 
   FILE* file = fopen(filename, "r");
   char lineBuffer[1024];
@@ -167,6 +208,8 @@ struct int_dist* loadDistributionFile(char* filename) {
     strtok(lineBuffer, " ,");
     char* sizeValue = strtok(NULL, " ,");
     dist->cdf_y[i] = atoi(sizeValue);
+    if(dist->cdf_y[i] < dist->min) dist->min = dist->cdf_y[i];
+    if(dist->cdf_y[i] > dist->max) dist->max = dist->cdf_y[i];
     i++;
   }//End while()
 
@@ -176,6 +219,8 @@ struct int_dist* loadDistributionFile(char* filename) {
   }
 
   fclose(file);
+  if(dist->min == INT_MAX) dist->min = 0;
+  if(dist->max == INT_MIN) dist->max = 0;
 
   return dist;
 
@@ -305,7 +350,7 @@ struct dep_dist* loadAndScaleDepFile(struct config* config) {
 struct request* generateRequest(struct config* config, struct worker* worker) {
 
   //Pick a random connection
-  struct conn* conn = worker->connections[randomFunction(worker) % worker->nConnections];
+  struct conn* conn = worker->connections[parRandomFunction(worker) % worker->nConnections];
 
   char* value = NULL;
   int valueSize = 0;
@@ -339,55 +384,22 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       request->next_request = NULL;
       return request;
 
-//     } else { 
+    } else if(config->sequential_access) {
+      if(worker->INDEX < worker->start_index || worker->INDEX > worker->end_index) {
+        worker->start_index = 0;
+        worker->end_index = config->dep_dist->n_entries - 1;
+        worker->INDEX = worker->end_index - (worker->cpu_num % config->dep_dist->n_entries);
+        printf("Worker %d sequential range: start=%d end=%d first=%d\n",
+               worker->cpu_num, worker->start_index, worker->end_index, worker->INDEX);
+      }
 
-//       if(worker->INDEX == -1){
-// 	srand(time(NULL));
-// 	worker->max_iteration = rand() % 11 + 20;
+      dep_entry = config->dep_dist->dep_entries[worker->INDEX];
+      worker->INDEX--;
+      if(worker->INDEX < worker->start_index) {
+        worker->INDEX = worker->end_index;
+        worker->iteration++;
+      }
 
-// 	srand(time(NULL));
-
-//   worker->start_index = 0;//(config->dep_dist->n_entries/8 /*- 5000000*/);
-// //	worker->end_index = config->dep_dist->n_entries-1;
-
-// 	// worker->start_index = rand() % (config->dep_dist->n_entries - 4000000);
-// 	// if(config->dep_dist->n_entries > 3000000)
-// 	//   worker->end_index = rand() % (config->dep_dist->n_entries - 3000000) + 3000000;
-// 	// else
-// 	 worker->end_index = config->dep_dist->n_entries -1;
-// 	printf("Total: %d\n",config->dep_dist->n_entries);
-
-//   // if(scanf("%d", &worker->start_index) == 1){}
-//   // if(scanf("%d", &worker->end_index) == 1){}
-// 	printf("START INDEX:%d,   end:%d,   total:%d\n",worker->start_index,worker->end_index,config->dep_dist->n_entries);
-// 	 worker->INDEX = worker->end_index;
-
-
-// 	}
-
-// 	dep_entry = config->dep_dist->dep_entries[ (worker->INDEX) % config->dep_dist->n_entries];
-	
-// 	// if(worker->INDEX % 5 == 0){
-//   //       dep_entry = getRandomDepEntry(config->dep_dist, worker);
-//   //     }
-
-// 	worker->INDEX--;
-// 	if(worker->INDEX == worker->start_index){
-//         // FILE *f = fopen("output_CS.csv","r+");     
-// 	printf("NEEEEEEEEEEEXXXXXXXXXXXXXXXXXXXT\n");
-//     // fprintf(f, "NEEEEEEEEEEEXXXXXXXXXXXXXXXXXXXT\n");
-//     // fflush(f);
-//     // fclose(f);
-// 	worker->INDEX = worker->end_index;
-// 	worker->iteration++;
-// 	}
-
-//       if(worker->NoOfCliffs > 1 && worker->iteration == worker->max_iteration){
-//         worker->INDEX = -1;
-//         worker->iteration = 0;
-//         worker->NoOfCliffs--;
-//       }
-    
    }else{
        dep_entry = getRandomDepEntry(config->dep_dist, worker);
       }
@@ -397,7 +409,27 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
   //printf("key %s valueSize %d\n", key, valueSize);
   //Pick a key
   }else{
-    int keyIndex = getIntQuantile(config->key_pop_dist);
+    if(config->pre_load) {
+      if(worker->warmup_key_check >= config->keysToPreload) {
+        printf("All warmup keys generated\n");
+        exit(0);
+      }
+      key = config->key_list->keys[worker->warmup_key_check];
+      warmup_index = worker->warmup_key;
+      worker->warmup_key--;
+      worker->warmup_key_check++;
+
+      valueSize = config->fixed_size > 0 ? config->fixed_size : sampleFromCdfTable(config->value_size_dist, worker);
+      value = malloc(sizeof(char) * valueSize);
+      memset(value, 'a', sizeof(char) * valueSize);
+      value[valueSize-1] = '\0';
+
+      struct request* request = createRequest(SET, conn, worker, key, value, TYPE_SET);
+      request->next_request = NULL;
+      return request;
+    }
+
+    int keyIndex = getIntQuantile(config->key_pop_dist, worker);
     key = config->key_list->keys[keyIndex];
     if(strlen(key) == 0){
       printf("zero length key: <%s> index %d\n", key, keyIndex);
@@ -407,30 +439,30 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
   //Pick a request type
   struct request* request = NULL;
   int op = 0;
-  double rand = ((randomFunction(worker) % 10000)/10000.0);
+  double rand = ((parRandomFunction(worker) % 10000)/10000.0);
      
 
    if (rand < config->incr_frac) {
 
       op = INCR;
       int type = TYPE_INCR;
-      int keyIndex = getIntQuantile(config->key_pop_dist);
+      int keyIndex = getIntQuantile(config->key_pop_dist, worker);
       key = config->key_list->keys[keyIndex];
 
       request = createRequest(op, conn, worker, key, value,type);
       request->next_request = NULL;      
 
-  } else if( ((randomFunction(worker) % 10000)/10000.0) < config->get_frac) {
+  } else if( ((parRandomFunction(worker) % 10000)/10000.0) < config->get_frac) {
 
     //See if this should be a multiget
-    rand = ((randomFunction(worker) % 10000)/10000.0);
+    rand = ((parRandomFunction(worker) % 10000)/10000.0);
 //    if(rand < config->multiget_frac) {
     if(rand < config->multiget_frac) {
       //printf("generating multiget\n");
       //Yes it's a multiget
       int nGets;
       if(config->multiget_size == -1){
-        nGets = getIntQuantile(config->multiget_dist);
+        nGets = getIntQuantile(config->multiget_dist, worker);
       } else {
         nGets = config->multiget_size;
       }
@@ -456,7 +488,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
           struct dep_entry* dep_entry = getRandomDepEntry(config->dep_dist, worker);
           key = dep_entry->key;
         } else {
-          int keyIndex = getIntQuantile(config->key_pop_dist);
+          int keyIndex = getIntQuantile(config->key_pop_dist, worker);
           key = config->key_list->keys[keyIndex];
         }
       }
@@ -487,7 +519,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       if(config->fixed_size > 0) {
         valueSize = config->fixed_size;
       } else {
-        valueSize = getIntQuantile(config->value_size_dist);
+        valueSize = sampleFromCdfTable(config->value_size_dist, worker);
         if(valueSize == 0) {
           printf("failboat: zero sizedd value\n");
           exit(-1);

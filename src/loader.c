@@ -11,6 +11,8 @@ void printUsage() {
 
         printf( "usage: loader [-option]\n"
                 "        [-a arg  input distribution file]\n"
+                "        [-b arg  base RNG seed for deterministic workers (also enables synthetic mode)]\n"
+                "        [-C arg  stats CSV output file]\n"
                 "        [-c arg  total number of connections]\n"
                 "        [-d arg  value size distribution file]\n"
                 "        [-D arg  size of main memory available to each memcached server in MB]\n"
@@ -26,13 +28,16 @@ void printUsage() {
                 "        [-N arg provide a key population distribution file]\n"
                 "        [-u use UDP protocl (default: TCP)]\n"
                 "        [-o arg  ouput distribution file, if input needs to be scaled]\n"
+                "        [-q use sequential access over the loaded Twitter/key-value distribution]\n"
+                "        [-R fill GET misses by issuing a SET for the missed key]\n"
                 "        [-r ATTEMPTED requests per second (default: max out rps)]\n"
-                "        [-s server configuration file]\n"
+                "        [-s tenant/target file]\n"
                 "        [-S dataset scaling factor]\n"
                 "        [-t arg  runtime of loadtesting in seconds (default: run forever)]\n"
                 "        [-T arg  interval between stats printing (default: 1)]\n"
                 "        [-w number of worker threads]\n"
-                "        [-x run timing tests instead of loadtesting]\n");
+                "        [-x run timing tests instead of loadtesting]\n"
+                "        [-y use synthetic fixed-key workload instead of loading Twitter popularity]\n");
 }
 
 
@@ -64,14 +69,19 @@ struct config* parseArgs(int argc, char** argv) {
   config->random_seed = 1;
   config->pre_load = 0;
   config->bad_multiget = 0;
+  config->synthetic_workload = 0;
+  config->sequential_access = 0;
+  config->fill_missing_gets = 0;
   config->value_size_dist = NULL;
   config->key_pop_dist = NULL;
   config->dep_dist = NULL;
   config->interarrival_dist = NULL;
   config->input_file=NULL;
   config->output_file=NULL;
+  config->stats_file=NULL;
   config->server_memory=1024;
   config->server_file=NULL;
+  config->base_seed = 1;
   int i;
   for(i=0; i<MAX_SERVERS; i++){
     config->server_port[i]=MEMCACHED_PORT;
@@ -80,7 +90,7 @@ struct config* parseArgs(int argc, char** argv) {
   }
 
   int c;
-  while ((c = getopt (argc, argv, "a:c:d:D:ef:g:hi:jk:l:L:m:MnN:o:p:ur:s:S:t:T:w:W:xz")) != -1) {
+  while ((c = getopt (argc, argv, "a:b:C:c:d:D:ef:g:hi:jk:l:L:m:MnN:o:p:qRur:s:S:t:T:w:W:xyz")) != -1) {
     switch (c) {
 
       case 'a':
@@ -88,8 +98,19 @@ struct config* parseArgs(int argc, char** argv) {
   	strcpy(config->input_file, optarg);	
         break;
 
+      case 'b':
+        config->base_seed = atoi(optarg);
+        config->synthetic_workload = 1;
+        printf("Using base seed %u\n", config->base_seed);
+        break;
+
       case 'c':
         config->n_connections_total = atoi(optarg);
+        break;
+
+      case 'C':
+        config->stats_file=calloc(strlen(optarg)+1, sizeof(char));
+        strcpy(config->stats_file, optarg);
         break;
 
       case 'd':
@@ -175,6 +196,14 @@ struct config* parseArgs(int argc, char** argv) {
         strcpy(config->output_file, optarg);
         break;
 
+      case 'q':
+        config->sequential_access = 1;
+        break;
+
+      case 'R':
+        config->fill_missing_gets = 1;
+        break;
+
       case 'r':
         config->rps = atoi(optarg);
         break;
@@ -205,6 +234,10 @@ struct config* parseArgs(int argc, char** argv) {
       case 'x':
         timingTests();
         exit(0);
+        break;
+
+      case 'y':
+        config->synthetic_workload = 1;
         break;
 
       case 'z':
@@ -250,6 +283,17 @@ void printConfiguration(struct config* config) {
   if(config->fixed_size > 0){
     printf("Fixed value size: %d\n", config->fixed_size);
   }
+  if(config->synthetic_workload){
+    printf("Workload mode: synthetic fixed-key keyspace\n");
+    printf("Synthetic keys: %d\n", config->n_keys);
+  } else if(config->sequential_access){
+    printf("Workload mode: sequential Twitter/key-value distribution\n");
+  } else {
+    printf("Workload mode: skewed Twitter/key-value distribution\n");
+  }
+  if(config->fill_missing_gets){
+    printf("GET miss fill: enabled\n");
+  }
   printf("Get fraction: %f\n", config->get_frac);
   if(config->naggles){
     printf("Naggle's algorithm: True\n");
@@ -268,7 +312,7 @@ void setupLoad(struct config* config) {
   }
 
   if(config->server_file==NULL){
-    printf("Option '-s' is mandatory and requires a server configuration file as an argument\n");
+    printf("Option '-s' is mandatory and requires a tenant/target file as an argument\n");
     exit(-1);	
   }
   loadServerFile(config);
@@ -278,13 +322,23 @@ void setupLoad(struct config* config) {
    exit(-1);	
   }
   
-  if((config->output_file == NULL) && (config->scaling_factor>1)){
+  if((config->output_file == NULL) && (config->scaling_factor>1) && !config->synthetic_workload){
    printf("Preloading requires an output file\n");
    exit(-1);	
   }
   
-  if(!config->pre_load || (config->scaling_factor==1)) config->dep_dist = loadDepFile(config);
-  else config->dep_dist = loadAndScaleDepFile(config);
+  if(config->synthetic_workload) {
+    config->dep_dist = NULL;
+    config->keysToPreload = config->n_keys;
+    if(config->fixed_size <= 0) {
+      printf("Synthetic mode requires '-f' with a fixed object size\n");
+      exit(-1);
+    }
+  } else if(!config->pre_load || (config->scaling_factor==1)) {
+    config->dep_dist = loadDepFile(config);
+  } else {
+    config->dep_dist = loadAndScaleDepFile(config);
+  }
   
 
   if(config->value_size_dist == NULL){
@@ -292,7 +346,7 @@ void setupLoad(struct config* config) {
   }
   if(config->key_pop_dist == NULL){
     config->key_pop_dist = createUniformDistribution(0, config->n_keys -1);
-    printf("created uniform distribution %d\n", config->n_keys);
+    printf("created uniform distribution for keys %d\n", config->n_keys);
   } else {
     config->n_keys = CDF_VALUES;
   }
@@ -397,13 +451,21 @@ int main(int argc, char** argv){
 
   setupLoad(config);
 
-  char file_path[100];
-  sprintf(file_path,"/users/AMH/cloudsuite_%s_%d.csv", 
-          inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr), config->server_port[0]);
+  char file_path[512];
+  if(config->stats_file != NULL) {
+    snprintf(file_path, sizeof(file_path), "%s", config->stats_file);
+  } else {
+    snprintf(file_path, sizeof(file_path), "/users/AMH/cloudsuite_%s_%d.csv",
+            inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr), config->server_port[0]);
+  }
   file_path[sizeof(file_path) - 1] = '\0';
 
   printf("filepath: %s\n", file_path);
   FILE *f = fopen(file_path,"w");
+  if(f == NULL) {
+    perror("Could not open stats CSV file");
+    exit(1);
+  }
 
   fprintf(f,"%2s,%10s,%8s,%16s, %8s,%11s,%10s,%13s,%10s,%10s,%10s,%12s,%10s,%10s,%11s,%14s\n", "ts", "timeDiff", "rps", "requests", "gets", "sets",  "hits", "misses", "avg_lat", "90th", "95th", "99th", "std", "min", "max", "avgGetSize");
   fflush(f);

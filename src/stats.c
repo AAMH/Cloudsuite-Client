@@ -165,13 +165,17 @@ void statsLoop(struct config* config, FILE * f) {
   gettimeofday(&start_time, NULL);
   pthread_mutex_unlock(&stats_lock);
 
-  int count = 0;
   for(int i=0; i<config->n_workers; i++){
   config->workers[i]->INDEX = -1;
   config->workers[i]->start_index = 0;
   config->workers[i]->counter = 10;
-  config->workers[i]->end_index = 850000;//config->dep_dist->n_entries / config->workers[i]->counter;
-  printf("Total: %d\n",config->dep_dist->n_entries);
+  if(config->dep_dist != NULL) {
+    config->workers[i]->end_index = config->dep_dist->n_entries - 1;
+    printf("Total: %d\n",config->dep_dist->n_entries);
+  } else {
+    config->workers[i]->end_index = config->n_keys - 1;
+    printf("No dep dist, using synthetic/uniform key distribution with %d keys\n", config->n_keys);
+  }
 
   // if(scanf("%d", &config->workers[i]->start_index) == 1){}
   // if(scanf("%d", &config->workers[i]->end_index) == 1){}
@@ -189,7 +193,6 @@ void statsLoop(struct config* config, FILE * f) {
   while(1) {
     printGlobalStats(config, f);
     sleep(config->stats_time);
-    count++;
  /*   if(count == 60){
       count = 0;
       config->cliff_mode = true;
@@ -201,4 +204,3 @@ void statsLoop(struct config* config, FILE * f) {
 
 
 }//End statisticsLoop()
-

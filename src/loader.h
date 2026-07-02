@@ -6,7 +6,9 @@
 
 
 #include <event2/event.h>
+#ifdef __linux__
 #include <malloc.h>
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>

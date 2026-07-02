@@ -4,8 +4,12 @@
 
 #include "config.h"
 #include "worker.h"
+#ifdef __linux__
 #include <malloc.h>
+#endif
 #include <math.h> 
+#include <limits.h>
+#include <inttypes.h>
 
 #define MAX_KEY_SIZE 250
 #define CDF_VALUES 10000
@@ -19,6 +23,9 @@ struct worker;
 
 struct int_dist {
   int cdf_y[CDF_VALUES];
+  int min;
+  int max;
+  int direct_uniform;
 };
 
 struct dep_entry {
@@ -39,7 +46,8 @@ struct key_list {
 
 
 
-int getIntQuantile(struct int_dist* dist);
+int sampleFromCdfTable(struct int_dist* dist, struct worker* worker);
+int getIntQuantile(struct int_dist* dist, struct worker* worker);
 struct int_dist* createUniformDistribution(int min, int max);
 struct int_dist* createConstantDistribution(int constant);
 struct int_dist* loadDistributionFile(char* filename);

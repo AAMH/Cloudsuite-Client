@@ -207,24 +207,40 @@ int processResponse(struct response* response, int final, double difftime){
       global_stats.misses++;
       currentRequest->worker->misses++;
 
-      // struct request* request;
-      // char* value = NULL;
-      // int valueSize = 0;
+      if(errorCode == KEY_NOT_FOUND &&
+         currentRequest->worker->config->fill_missing_gets &&
+         (currentRequest->header.opcode == OP_GET || currentRequest->header.opcode == OP_GETQ)) {
+        struct worker* worker = currentRequest->worker;
+        struct config* config = worker->config;
+        int valueSize = config->fixed_size > 0 ? config->fixed_size : 0;
 
-      // //valueSize = //getIntQuantile(currentRequest->worker->config->value_size_dist);
-      // valueSize = search(currentRequest->key)->ValueS;
-      // value = malloc(sizeof(char) * valueSize);
-      // memset(value, 'a', sizeof(char) * valueSize);
-      // value[valueSize-1] = '\0';
-      // request = createRequest(SET, currentRequest->worker->connections[randomFunction(currentRequest->worker) % currentRequest->worker->nConnections], currentRequest->worker, currentRequest->key, value, TYPE_SET);
-      // request->next_request = NULL;
+        if(valueSize <= 0 && config->dep_dist != NULL) {
+          struct DataItem* item = search(currentRequest->key);
+          if(item != NULL) {
+            valueSize = item->ValueS;
+          }
+        }
+        if(valueSize <= 0 && config->value_size_dist != NULL) {
+          valueSize = sampleFromCdfTable(config->value_size_dist, worker);
+        }
+        if(valueSize <= 0) {
+          valueSize = 1;
+        }
 
+        char* value = malloc(sizeof(char) * valueSize);
+        memset(value, 'a', sizeof(char) * valueSize);
+        value[valueSize-1] = '\0';
 
-      // if( !pushRequest(response->request->worker, request) ) {
-      //   deleteRequest(request);
-      // }
-      // else
-      //   sendRequest(request);
+        struct conn* conn = worker->connections[parRandomFunction(worker) % worker->nConnections];
+        struct request* fillRequest = createRequest(SET, conn, worker, currentRequest->key, value, TYPE_SET);
+        fillRequest->next_request = NULL;
+
+        if(!pushRequest(worker, fillRequest)) {
+          deleteRequest(fillRequest);
+        } else {
+          sendRequest(fillRequest);
+        }
+      }
 
       currentRequest = currentRequest->next_request;
     }//End while
@@ -312,5 +328,4 @@ void checkError(int errorCode, char* key, char* value){
   exit(-1);
 
 }//End checkError()
-
 

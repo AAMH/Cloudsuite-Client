@@ -36,6 +36,7 @@ struct config {
   char* server_file;
   char* input_file;
   char* output_file;
+  char* stats_file;
   int server_port[MAX_SERVERS];
   int server_memory;
   float server_share[MAX_SERVERS];	
@@ -58,8 +59,12 @@ struct config {
   int random_seed;
   int pre_load;
   int bad_multiget;
+  int synthetic_workload;
+  int sequential_access;
+  int fill_missing_gets;
 
   uint32_t current_request_uid;
+  uint32_t base_seed;
 
 
 };
