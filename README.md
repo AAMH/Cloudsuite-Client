@@ -113,6 +113,24 @@ Main phase:
 
 Use `-q` to walk sequentially through the loaded Twitter/key-value distribution instead of sampling from the skewed CDF. Each worker starts at a slightly different position and wraps around at the beginning of the distribution.
 
+Sequential preload:
+
+```bash
+./loader \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
+  -s tenants.txt \
+  -q \
+  -w 1 \
+  -S 1 \
+  -D 2048 \
+  -j \
+  -T 1 \
+  -r 100000 \
+  -C ./sequential_preload_stats.csv
+```
+
+Sequential main phase:
+
 ```bash
 ./loader \
   -a ../twitter_dataset/twitter_dataset_scaled_x4 \
