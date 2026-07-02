@@ -26,7 +26,7 @@ The source builds a single executable named `loader`.
 
 ../twitter_dataset/
   twitter_dataset_unscaled
-  twitter_dataset_2     Optional, if present in your checkout
+  twitter_dataset_scaled_x4     Optional, if present in your checkout or manually scaled
 ```
 
 ## Build
@@ -84,7 +84,7 @@ Preload:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -w 2 \
   -S 1 \
@@ -99,7 +99,7 @@ Main phase:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -g 1 \
   -T 1 \
@@ -115,7 +115,7 @@ Use `-q` to walk sequentially through the loaded Twitter/key-value distribution 
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -q \
   -g 1 \
@@ -130,7 +130,7 @@ To also fill GET misses with SET requests, add `-R`:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_2 \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -q \
   -R \
@@ -164,7 +164,7 @@ Synthetic preload:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_unscaled \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -w 1 \
   -S 1 \
@@ -183,7 +183,7 @@ Synthetic main phase:
 
 ```bash
 ./loader \
-  -a ../twitter_dataset/twitter_dataset_unscaled \
+  -a ../twitter_dataset/twitter_dataset_scaled_x4 \
   -s tenants.txt \
   -g 1 \
   -T 1 \
@@ -356,7 +356,7 @@ Example:
 ```bash
 make clean && make
 
-./loader -a ../twitter_dataset/twitter_dataset_2 -s tenants.txt -w 1 -j -D 2048 -S 4 -o ./twitter_dataset_scaled_x4 -r 100000 -T 1 -C ./preload_scaled.csv
+./loader -a ../twitter_dataset/twitter_dataset_unscaled -s tenants.txt -w 1 -j -D 2048 -S 4 -o ../twitter_dataset/twitter_dataset_scaled_x4 -r 100000 -T 1 -C ./preload_scaled.csv
 
-./loader -a ./twitter_dataset_scaled_x4 -s tenants.txt -w 1 -c 25 -g 0.95 -r 25000 -T 1 -C ./main_phase.csv
+./loader -a ../twitter_dataset/twitter_dataset_scaled_x4 -s tenants.txt -w 1 -c 25 -g 0.95 -r 25000 -T 1 -C ./main_phase.csv
 ```
