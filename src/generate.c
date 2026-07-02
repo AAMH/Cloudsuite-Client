@@ -63,7 +63,7 @@ struct key_list* generateKeys(struct config* config) {
 
 int getRandomIndex(struct dep_dist* dep_dist, struct worker* worker){
 
-  double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
+  double cdf_to_lookup = (parRandomUnsignedFunction(worker) % 100000000)/100000000.0;
   //Do a binary search
   int top = 0;
   int bottom = dep_dist->n_entries-1;
@@ -87,7 +87,7 @@ int getRandomIndex(struct dep_dist* dep_dist, struct worker* worker){
 
 struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* worker){
 
-  double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
+  double cdf_to_lookup = (parRandomUnsignedFunction(worker) % 100000000)/100000000.0;
   //Do a binary search
   int top = 0;
   int bottom = dep_dist->n_entries-1;
@@ -278,6 +278,15 @@ struct dep_dist* loadDepFile(struct config* config) {
   avg_size = avg_size/lines;
   config->keysToPreload = floor(1024.0*1024*config->server_memory/(avg_size+150));
   if(config->keysToPreload>lines) config->keysToPreload=lines-1;
+  int first_preload_index = dist->n_entries - config->keysToPreload;
+  double previous_cdf = first_preload_index > 0 ? dist->dep_entries[first_preload_index - 1]->cdf : 0.0;
+  double preload_coverage = dist->dep_entries[dist->n_entries - 1]->cdf - previous_cdf;
+  printf("Average Size = %10.5f\n", avg_size);
+  printf("Keys to Preload = %d\n", config->keysToPreload);
+  printf("Estimated request probability covered by preload = %.2f%%\n", 100.0 * preload_coverage);
+  if(config->keysToPreload >= lines - 1) {
+    printf("Warning: preload is configured to load nearly the full dataset. If memcached is smaller than -D, later cold inserts can evict hot keys.\n");
+  }
   fclose(file);
 #ifdef FLEXUS
   MAGIC2(200, 0);
