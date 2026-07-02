@@ -36,6 +36,7 @@ The source builds a single executable named `loader`.
 Install build tools and libevent development headers, then run:
 
 ```bash
+cd src
 make clean
 make
 ```
