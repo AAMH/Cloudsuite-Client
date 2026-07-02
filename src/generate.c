@@ -63,7 +63,7 @@ struct key_list* generateKeys(struct config* config) {
 
 int getRandomIndex(struct dep_dist* dep_dist, struct worker* worker){
 
-  double cdf_to_lookup = (parRandomUnsignedFunction(worker) % 100000000)/100000000.0;
+  double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
   //Do a binary search
   int top = 0;
   int bottom = dep_dist->n_entries-1;
@@ -87,7 +87,7 @@ int getRandomIndex(struct dep_dist* dep_dist, struct worker* worker){
 
 struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* worker){
 
-  double cdf_to_lookup = (parRandomUnsignedFunction(worker) % 100000000)/100000000.0;
+  double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
   //Do a binary search
   int top = 0;
   int bottom = dep_dist->n_entries-1;
@@ -118,6 +118,15 @@ int sampleFromCdfTable(struct int_dist* dist, struct worker* worker) {
   return value;
 
 }//End sampleFromCdfTable()
+
+int sampleFromCdfTableGlobal(struct int_dist* dist) {
+
+  int quantileIndex = (randomFunction() % CDF_VALUES);
+  int value = dist->cdf_y[quantileIndex];
+
+  return value;
+
+}//End sampleFromCdfTableGlobal()
 
 int getIntQuantile(struct int_dist* dist, struct worker* worker) {
 
@@ -355,7 +364,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
   }
 
   //Pick a random connection
-  unsigned int connIndex = parRandomUnsignedFunction(worker) % worker->nConnections;
+  unsigned int connIndex = randomFunction() % worker->nConnections;
   struct conn* conn = worker->connections[connIndex];
   if(conn == NULL) {
     printf("generateRequest selected null connection: worker=%d index=%u nConnections=%d\n",
@@ -450,7 +459,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
   //Pick a request type
   struct request* request = NULL;
   int op = 0;
-  double rand = ((parRandomUnsignedFunction(worker) % 10000)/10000.0);
+  double rand = ((randomFunction() % 10000)/10000.0);
      
 
    if (rand < config->incr_frac) {
@@ -463,10 +472,10 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       request = createRequest(op, conn, worker, key, value,type);
       request->next_request = NULL;      
 
-  } else if( ((parRandomUnsignedFunction(worker) % 10000)/10000.0) < config->get_frac) {
+  } else if( ((randomFunction() % 10000)/10000.0) < config->get_frac) {
 
     //See if this should be a multiget
-    rand = ((parRandomUnsignedFunction(worker) % 10000)/10000.0);
+    rand = ((randomFunction() % 10000)/10000.0);
 //    if(rand < config->multiget_frac) {
     if(rand < config->multiget_frac) {
       //printf("generating multiget\n");

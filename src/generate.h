@@ -47,6 +47,7 @@ struct key_list {
 
 
 int sampleFromCdfTable(struct int_dist* dist, struct worker* worker);
+int sampleFromCdfTableGlobal(struct int_dist* dist);
 int getIntQuantile(struct int_dist* dist, struct worker* worker);
 struct int_dist* createUniformDistribution(int min, int max);
 struct int_dist* createConstantDistribution(int constant);

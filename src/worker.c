@@ -14,7 +14,14 @@ void* workerFunction(void* arg) {
 
 //  sgenrand(worker->cpu_num, worker->config->random_seed);
 
-  uint32_t seed = worker->config->base_seed ^ (0x9e3779b9u * (uint32_t)worker->cpu_num);
+  uint32_t seed;
+  if(worker->config->synthetic_workload) {
+    seed = worker->config->base_seed ^ (0x9e3779b9u * (uint32_t)worker->cpu_num);
+  } else {
+    struct timeval timestamp;
+    gettimeofday(&timestamp, NULL);
+    seed = (timestamp.tv_usec + worker->cpu_num) % 2309;
+  }
   sgenrand(seed, &(worker->myMT19937p));
 // sgenrand(worker->config->random_seed, &(worker->myMT19937p));
 /* Set affinity mask to include CPUs 0 to 7 */
@@ -116,7 +123,11 @@ struct int_dist* interarrival_dist = worker->config->interarrival_dist;
   if(interarrival_dist != NULL){
     
 if(worker->interarrival_time <= 0){
-        interarrival_time = worker->scale * sampleFromCdfTable(interarrival_dist, worker); //In microseconds
+        if(worker->config->synthetic_workload) {
+          interarrival_time = worker->scale * sampleFromCdfTable(interarrival_dist, worker); //In microseconds
+        } else {
+          interarrival_time = worker->scale * sampleFromCdfTableGlobal(interarrival_dist); //In microseconds
+        }
 	//printf("scale: %f \n ",worker->scale);        
 //   printf("new interarrival_time %d\n", interarrival_time);
         worker->interarrival_time = interarrival_time;
