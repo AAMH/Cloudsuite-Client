@@ -24,6 +24,10 @@ int parRandomFunction(struct worker* worker){
   return rand_int;
 }//End randomFunction()
 
+uint32_t parRandomUnsignedFunction(struct worker* worker){
+  return (uint32_t)genrand(&(worker->myMT19937p));
+}//End parRandomUnsignedFunction()
+
 double round(double d) {
   return floor(d + 0.5);
 }
@@ -187,4 +191,3 @@ void readBlock(int fd, void* buffer, int readSize) {
 #endif
 
 }//End readBlock()
-

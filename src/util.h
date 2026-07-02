@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include "stats.h"
@@ -21,6 +22,7 @@ void timestampTest();
 void lockTest();
 int randomFunction();
 int parRandomFunction(struct worker* worker);
+uint32_t parRandomUnsignedFunction(struct worker* worker);
 double round(double d);
 
 

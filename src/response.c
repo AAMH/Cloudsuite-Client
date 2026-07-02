@@ -231,7 +231,7 @@ int processResponse(struct response* response, int final, double difftime){
         memset(value, 'a', sizeof(char) * valueSize);
         value[valueSize-1] = '\0';
 
-        struct conn* conn = worker->connections[parRandomFunction(worker) % worker->nConnections];
+        struct conn* conn = worker->connections[parRandomUnsignedFunction(worker) % worker->nConnections];
         struct request* fillRequest = createRequest(SET, conn, worker, currentRequest->key, value, TYPE_SET);
         fillRequest->next_request = NULL;
 
@@ -328,4 +328,3 @@ void checkError(int errorCode, char* key, char* value){
   exit(-1);
 
 }//End checkError()
-
