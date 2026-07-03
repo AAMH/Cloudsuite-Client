@@ -2,11 +2,11 @@
 
 This repository contains a CloudSuite Memcached benchmarking loader with support for multiple workload modes:
 
-- default CloudSuite/Twitter skewed access pattern
-- sequential access over the loaded Twitter/key-value distribution
-- synthetic fixed-size workload generation with deterministic fixed-format keys
-- optional GET-miss fill behavior, where a missed GET can enqueue a SET for the same key
-- periodic CSV stats logging
+- Default CloudSuite/Twitter skewed access pattern
+- Sequential access over the loaded Twitter/key-value distribution
+- Synthetic fixed-size workload generation with deterministic fixed-format keys
+- Optional GET-miss fill behavior, where a missed GET can enqueue a SET for the same key
+- Periodic CSV stats logging
 
 The source builds a single executable named `loader`.
 
